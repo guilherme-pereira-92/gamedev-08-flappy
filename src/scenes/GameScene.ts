@@ -10,9 +10,10 @@ const GRAVITY = 1400;          // px/s²
 const FLAP_VEL = -440;         // px/s (negativo = sobe)
 const MAX_FALL_SPEED = 720;    // px/s — clamp pra não passar despercebido pelo cano
 const PIPE_WIDTH = 64;
-const PIPE_SCROLL = 180;       // px/s (escala com tempo)
-const PIPE_SPACING = 240;      // px entre canos consecutivos
-const PIPE_GAP = 160;          // altura do gap inicial (encolhe com tempo)
+const PIPE_SCROLL = 180;       // px/s base (escala em tiers de 5 pontos)
+const PIPE_SPACING_MIN = 200;  // distância mínima entre canos consecutivos (px)
+const PIPE_SPACING_MAX = 280;  // distância máxima — aleatorizada a cada spawn
+const PIPE_GAP = 160;          // altura do gap inicial (encolhe em tiers)
 const PIPE_GAP_MIN = 110;
 const PIPE_MARGIN_TOP = 70;    // distância mínima do topo
 const PIPE_MARGIN_BOTTOM = 90; // ditto do chão
@@ -40,7 +41,8 @@ export class GameScene extends Phaser.Scene {
   private birdVy = 0;
 
   private pipes: Pipe[] = [];
-  private spawnX = 0;
+  private nextSpawnGap = 0;
+  private lastTier = 0;
   private state: State = "ready";
 
   private score = 0;
@@ -63,8 +65,9 @@ export class GameScene extends Phaser.Scene {
     this.birdVy = 0;
     this.pipes = [];
     this.score = 0;
+    this.lastTier = 0;
     this.isNight = false;
-    this.spawnX = W + 80;
+    this.nextSpawnGap = Phaser.Math.Between(PIPE_SPACING_MIN, PIPE_SPACING_MAX);
 
     // Sky background — recolorível conforme dia/noite
     this.skyTop = this.add.rectangle(0, 0, W, H, COLOR_HEX.bg).setOrigin(0, 0);
@@ -164,11 +167,14 @@ export class GameScene extends Phaser.Scene {
     this.syncBirdParts();
 
     // ---- spawn pipes ----
+    // Spawn quando o último cano caminhou nextSpawnGap px da borda direita.
+    // Resultado: distância on-screen entre canos == nextSpawnGap (200-280px).
     const W = this.scale.width;
-    const lastX = this.pipes.length > 0 ? this.pipes[this.pipes.length - 1].x : 0;
-    if (this.pipes.length === 0 || (W - lastX) >= PIPE_SPACING) {
-      this.spawnPipe(this.spawnX);
-      this.spawnX = (this.pipes[this.pipes.length - 1].x) + PIPE_SPACING;
+    const lastPipe = this.pipes[this.pipes.length - 1];
+    const shouldSpawn = !lastPipe || lastPipe.x <= W - this.nextSpawnGap;
+    if (shouldSpawn) {
+      this.spawnPipe(W + PIPE_WIDTH / 2);
+      this.nextSpawnGap = Phaser.Math.Between(PIPE_SPACING_MIN, PIPE_SPACING_MAX);
     }
 
     // ---- scroll pipes ----
@@ -188,7 +194,16 @@ export class GameScene extends Phaser.Scene {
         this.score += 1;
         this.scoreText.setText(String(this.score).padStart(3, "0"));
         playTone(1175, 60, "triangle", 0.10);
-        // Day/night swap a cada 10 pontos
+
+        // Speed/gap tier: a cada 5 pontos, fica mais difícil.
+        // Sinaliza visualmente com flash quando tier sobe.
+        const tier = Math.floor(this.score / 5);
+        if (tier > this.lastTier) {
+          this.lastTier = tier;
+          this.onTierUp();
+        }
+
+        // Day/night swap a cada 10 pontos (independente do tier)
         if (this.score % 10 === 0) this.toggleDayNight();
       }
     }
@@ -207,16 +222,27 @@ export class GameScene extends Phaser.Scene {
     this.checkCollisions();
   }
 
-  // Velocidade de scroll escala suavemente com score (até +60% acima de 30 pontos)
+  // Velocidade escala em tiers de 5 pontos. +12% por tier, cap em +80% (tier 7+).
+  // Step-wise (não contínuo) cria sensação de "fica mais difícil agora" visível.
   private currentScrollSpeed(): number {
-    const bonus = Math.min(0.6, this.score * 0.018);
+    const tier = Math.floor(this.score / 5);
+    const bonus = Math.min(0.8, tier * 0.12);
     return PIPE_SCROLL * (1 + bonus);
   }
 
-  // Gap do cano encolhe um pouquinho com score (mínimo PIPE_GAP_MIN)
+  // Gap encolhe 10px por tier, com piso em PIPE_GAP_MIN.
   private currentGap(): number {
-    const shrink = Math.min(PIPE_GAP - PIPE_GAP_MIN, this.score * 1.5);
+    const tier = Math.floor(this.score / 5);
+    const shrink = Math.min(PIPE_GAP - PIPE_GAP_MIN, tier * 10);
     return PIPE_GAP - shrink;
+  }
+
+  // Sinaliza pro jogador que a velocidade/dificuldade subiu.
+  // Flash laranja + tone descendente — diferente do milestone azul (day/night).
+  private onTierUp() {
+    this.cameras.main.flash(180, 255, 69, 0, false);
+    playTone(880, 120, "sawtooth", 0.10);
+    this.time.delayedCall(140, () => playTone(660, 140, "sawtooth", 0.10));
   }
 
   // ---------- pipes ----------
