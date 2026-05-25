@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "number": 8,
+  "slug": "08-flappy",
+  "title": "Flappy",
+  "shortDescription": "Um botão, gravidade, canos infinitos — primeiro jogo procedural sem fim.",
+  "stack": ["TypeScript", "Phaser 3", "Vite"],
+  "concepts": [
+    "geração procedural infinita (canos spawnam pra sempre, sem mapa fixo)",
+    "gravidade constante + impulso vertical no input (\"flap\")",
+    "object pooling implícito: canos saem da tela são reciclados",
+    "score por gap atravessado (collision-free zone detection)",
+    "dia/noite alternando a cada 10 pontos (palette swap)",
+    "dificuldade escala com tempo: gap menor, canos mais próximos",
+    "death by ceiling/floor/pipe collision",
+    "high score persistido em localStorage"
+  ],
+  "publishedAt": "2026-05-25",
+  "live": "https://guilherme-pereira-92.github.io/gamedev-08-flappy/",
+  "repo": "https://github.com/guilherme-pereira-92/gamedev-08-flappy",
+  "cover": "screenshots/cover.png",
+  "playable": true,
+  "mobile": "desktop-only"
+}
